@@ -454,3 +454,63 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Doc Review — Questions, Clarifications & Simplification Opportunities
+
+*Added 2026-06-03 by Claude Code doc-review.*
+
+### Questions & Clarifications Needed
+
+**SSE and dynamic watchlist changes**
+When the user adds a new ticker (manually or via AI chat), does the existing SSE connection automatically start streaming that ticker, or must the client reconnect? This is a critical UX detail — the plan says the stream pushes "all tickers known to the system" but doesn't define when the simulator/Massive poller picks up a newly-added ticker.
+
+**"Daily change %" source**
+The watchlist panel shows a daily change %. The simulator has no concept of yesterday's close. Clarify: is this the change since the simulator started (session-relative), a hardcoded seed value, or something else? Agents will make incompatible choices without a definition here.
+
+**Main chart area data source**
+Sparklines accumulate from SSE since page load (in-memory). The main chart area is described as showing "price over time" for a selected ticker — does this use the same in-memory accumulation, or is there a historical prices API endpoint? Currently no such endpoint is defined. Either add `GET /api/prices/{ticker}/history` or clarify that the main chart only shows session data.
+
+**`watchlist_changes` valid action values**
+The structured output schema shows `"action": "add"` but never defines valid values explicitly. Clarify: is `"remove"` the only other value? Agents implementing the LLM parsing will need an exhaustive list.
+
+**SSE event payload shape**
+Section 6 mentions each SSE event contains "ticker, price, previous price, timestamp, and change direction" but doesn't define the JSON field names or the values for `change direction` (`"up"` / `"down"` / `"unchanged"`? numeric delta?). Define the exact payload schema here or in a separate API contract doc.
+
+**LLM mock response content**
+Section 9 says `LLM_MOCK=true` returns "deterministic mock responses" but doesn't specify what they are. E2E tests need to assert on specific text, trade quantities, and tickers. Define the fixed mock payload (or point to where it will be defined) so frontend and backend agents produce compatible test expectations.
+
+**Ticker validation in simulator mode**
+When adding a ticker, does the backend validate it's a known symbol? In simulator mode, any string (including typos like "APPL") becomes a valid "ticker" with simulated prices. Define whether validation is in scope, and if so, against what list.
+
+**Chat history truncation**
+Section 9 says "loads recent conversation history" without specifying how many messages. Long conversations will exceed the LLM's context window. Define a concrete limit (e.g., last 20 messages or last N tokens) so agents implement this consistently.
+
+**Stale price cache on trade**
+`POST /api/portfolio/trade` fills at "current price" from the cache. How stale can that price be? If the cache hasn't updated in 30 seconds (e.g., Massive API rate-limited), should the trade be rejected or filled at the stale price?
+
+**Empty portfolio state**
+The heatmap treemap requires at least one position to render. What does the UI show before the user holds any positions? Define a placeholder or empty state.
+
+---
+
+### Simplification Opportunities
+
+**Drop UUID primary keys for non-join tables**
+`watchlist` and `positions` already have `UNIQUE (user_id, ticker)` constraints that serve as the natural key. The UUID `id` column is never used as a foreign key target anywhere in the schema. Using the composite natural key as the PK removes a column from both tables and simplifies insert/update logic.
+
+**Collapse `/api/portfolio/history` into `/api/portfolio`**
+The P&L chart is the only consumer of the history endpoint. Adding an optional `?include_history=true` query param to `GET /api/portfolio` reduces the API surface from 5 endpoints to 4 with no loss of capability. Fewer endpoints = fewer route handlers = less for agents to get wrong.
+
+**Combine start/stop scripts into one script per platform**
+Four scripts (start_mac, stop_mac, start_windows, stop_windows) is 4x the surface to maintain. A single `manage.sh` with a `start|stop|restart` argument (and `manage.ps1` for Windows) halves the script count. Alternatively, lean on `docker-compose.yml` (already in the plan) as the primary interface and drop the custom scripts entirely.
+
+**Remove `actions` column from `chat_messages` or make it the sole trade record**
+The `actions` JSON column in `chat_messages` and the `trades` table both record AI-executed trades, creating two sources of truth. Either (a) remove `actions` and have the frontend reconstruct context from the `trades` table, or (b) keep `actions` as the record and skip writing to `trades` for AI-executed trades. Keeping both requires careful synchronization.
+
+**Scope frontend unit tests to pure functions only**
+Testing CSS animation triggers and price flash effects with React Testing Library is fragile and low-value for a course project. Scope frontend unit tests to pure calculation functions (P&L math, treemap sizing) and leave visual behavior to E2E tests. This makes the testing section realistic and avoids agents writing tests that are hard to make pass.
+
+**Simplify `portfolio_snapshots` to avoid unbounded growth**
+Snapshots every 30 seconds with no retention policy means ~2,880 rows/day. For a course demo this is fine short-term, but define a maximum retention period (e.g., keep the last 24 hours) or a row cap to prevent the SQLite file from growing large during extended demos. Even a simple `DELETE FROM portfolio_snapshots WHERE recorded_at < datetime('now', '-24 hours')` on each insert is enough.
