@@ -1,143 +1,233 @@
 """
-FinAlly — Market Data Demo
-==========================
-Demonstrates the market data layer: factory, simulator, price cache, and
-the MarketDataProvider interface.
+FinAlly — Market Data Live Dashboard
+=====================================
+A live-updating terminal dashboard that demonstrates the market data layer.
+The table stays fixed; only the prices, arrows, tick-delta, session %,
+and sparklines refresh in-place on each GBM tick.
 
 Run from the backend/ directory:
     uv run market_data_demo.py
 
-What you will see
------------------
-* The MarketSimulator starts up and seeds 5 tickers at realistic prices.
-* Every 500 ms (one GBM tick) the table refreshes with live prices.
-* Green rows = price moved up since last tick.
-* Red rows  = price moved down since last tick.
-* "Session %" tracks drift from the opening seed price (prev_close).
-
-Key concepts shown
-------------------
-* create_market_provider()  — factory picks Simulator vs Massive API
-* provider.start(tickers)   — begins the background async task
-* provider.get_all_prices() — reads the shared PriceCache snapshot
-* provider.add_ticker()     — hot-adds a ticker at runtime
-* provider.stop()           — clean shutdown, cancels the background task
+Key concepts demonstrated
+--------------------------
+create_market_provider()    factory selects Simulator vs Massive API
+provider.start(tickers)     seeds the cache, launches the background loop
+provider.get_all_prices()   reads a snapshot of the shared PriceCache
+provider.add_ticker()       hot-adds a ticker to a running simulation
+provider.stop()             cancels the background task cleanly
 """
 
 import asyncio
 import os
 import sys
 import time
+from collections import deque
 
-# Allow running as a plain script from the backend/ directory.
+# Make the market package importable when running as a script from backend/.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from market import create_market_provider, PriceQuote  # noqa: E402
+from rich import box
+from rich.columns import Columns
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
-# ── demo config ────────────────────────────────────────────────────────────────
+from market import PriceQuote, create_market_provider  # noqa: E402
 
-TICKERS       = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL"]
-N_UPDATES     = 10   # how many 500 ms ticks to display
-TICK_PAUSE    = 0.55 # slightly longer than the simulator's 0.5 s tick interval
+# ── config ─────────────────────────────────────────────────────────────────────
 
-# ── ANSI helpers ───────────────────────────────────────────────────────────────
+INITIAL_TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL"]
+N_UPDATES       = 40        # stop automatically after this many ticks
+TICK_PAUSE      = 0.55      # slightly longer than the simulator's 0.5 s interval
+SPARKLINE_LEN   = 30        # price history length per ticker
+ADD_TICKER_AT   = 12        # update number at which AMZN is hot-added
 
-GREEN  = "\033[92m"
-RED    = "\033[91m"
-YELLOW = "\033[93m"
-BOLD   = "\033[1m"
-DIM    = "\033[2m"
-RESET  = "\033[0m"
+# ── sparkline ──────────────────────────────────────────────────────────────────
+
+_SPARK = "▁▂▃▄▅▆▇█"
 
 
-def _row(quote: PriceQuote, prev_price: float | None) -> str:
-    """Format one table row with colour based on tick direction."""
-    if prev_price is None:
-        color, arrow = DIM, "·"
-    elif quote.price > prev_price:
-        color, arrow = GREEN, "▲"
-    elif quote.price < prev_price:
-        color, arrow = RED,   "▼"
+def sparkline(prices: list[float]) -> str:
+    """Map a price series to a Unicode block-character sparkline."""
+    if len(prices) < 2:
+        return "·" * len(prices)
+    lo, hi = min(prices), max(prices)
+    if lo == hi:
+        return "─" * len(prices)
+    span = hi - lo
+    return "".join(_SPARK[int((p - lo) / span * 7)] for p in prices)
+
+
+# ── renderable builders ────────────────────────────────────────────────────────
+
+def _price_table(
+    quotes:  dict[str, PriceQuote],
+    prev:    dict[str, float],
+    history: dict[str, deque],
+    tickers: list[str],
+) -> Table:
+    tbl = Table(
+        box=box.SIMPLE_HEAD,
+        header_style="bold bright_white",
+        show_edge=False,
+        pad_edge=True,
+        expand=True,
+    )
+    tbl.add_column("TICKER",    style="bold",    min_width=7)
+    tbl.add_column("PRICE",     justify="right", min_width=11)
+    tbl.add_column("",                           width=3)      # arrow
+    tbl.add_column("TICK Δ",    justify="right", min_width=8)
+    tbl.add_column("SESSION %", justify="right", min_width=10)
+    tbl.add_column(f"SPARKLINE  ({SPARKLINE_LEN} ticks)", min_width=SPARKLINE_LEN + 2)
+
+    for ticker in tickers:
+        quote = quotes.get(ticker)
+        if not quote:
+            # Ticker just added — still waiting for its first tick.
+            tbl.add_row(
+                Text(ticker, style="dim"),
+                Text("…",    style="dim"),
+                Text("·",    style="dim"),
+                Text("—",    style="dim"),
+                Text("—",    style="dim"),
+                Text("",     style="dim"),
+            )
+            continue
+
+        prev_price = prev.get(ticker)
+
+        if prev_price is None:
+            color, arrow, delta_str = "dim", "·", "—"
+        elif quote.price > prev_price:
+            color, arrow = "bright_green", "▲"
+            delta_str = f"+{quote.price - prev_price:.2f}"
+        elif quote.price < prev_price:
+            color, arrow = "bright_red", "▼"
+            delta_str = f"−{prev_price - quote.price:.2f}"
+        else:
+            color, arrow, delta_str = "dim", "─", "0.00"
+
+        pct_color = "bright_green" if quote.change_pct >= 0 else "bright_red"
+        sign      = "+" if quote.change_pct >= 0 else ""
+        spark     = sparkline(list(history[ticker]))
+
+        tbl.add_row(
+            Text(ticker,                              style=f"bold {color}"),
+            Text(f"${quote.price:,.2f}",              style=color),
+            Text(arrow,                               style=f"bold {color}"),
+            Text(delta_str,                           style=color),
+            Text(f"{sign}{quote.change_pct:.3f}%",    style=pct_color),
+            Text(spark,                               style=color),
+        )
+
+    return tbl
+
+
+def _build_layout(
+    quotes:       dict[str, PriceQuote],
+    prev:         dict[str, float],
+    history:      dict[str, deque],
+    tickers:      list[str],
+    update_num:   int,
+    n_updates:    int,
+    provider_name: str,
+    event_msg:    str,
+) -> Layout:
+    layout = Layout()
+    layout.split_column(
+        Layout(name="header", size=5),
+        Layout(name="body"),
+        Layout(name="footer", size=3),
+    )
+
+    # ── header ─────────────────────────────────────────────────────────────────
+    ts = time.strftime("%H:%M:%S")
+    title = Text(justify="left")
+    title.append("FinAlly", style="bold cyan")
+    title.append("  │  ", style="dim")
+    title.append("Market Data Dashboard", style="bold white")
+    title.append("    provider: ", style="dim")
+    title.append(provider_name, style="bold yellow")
+    title.append(f"    {ts}", style="dim")
+    layout["header"].update(Panel(title, padding=(1, 2), border_style="cyan"))
+
+    # ── body ───────────────────────────────────────────────────────────────────
+    tbl = _price_table(quotes, prev, history, tickers)
+    layout["body"].update(Panel(tbl, border_style="dim", padding=(0, 1)))
+
+    # ── footer ─────────────────────────────────────────────────────────────────
+    bar_width  = 36
+    filled     = int(update_num / n_updates * bar_width)
+    bar        = "█" * filled + "░" * (bar_width - filled)
+    footer_txt = Text(justify="left")
+    footer_txt.append(f"  update {update_num:>3}/{n_updates}  ", style="dim")
+    footer_txt.append(f"[{bar}]", style="cyan")
+    if event_msg:
+        footer_txt.append(f"  ✦ {event_msg}", style="bold yellow")
     else:
-        color, arrow = DIM,   "="
+        footer_txt.append("  Ctrl-C to exit early", style="dim")
+    layout["footer"].update(Panel(footer_txt, padding=(0, 1), border_style="dim"))
 
-    sign = "+" if quote.change_pct >= 0 else ""
-    tick_delta = "" if prev_price is None else f"{quote.price - prev_price:+.2f}"
-
-    return (
-        f"  {color}{BOLD}{quote.ticker:<6}{RESET}"
-        f"  {color}${quote.price:>9.2f}{RESET}"
-        f"  {color}{arrow}{RESET}"
-        f"  {color}{tick_delta:>7}{RESET}"
-        f"  {color}{sign}{quote.change_pct:.3f}%{RESET}"
-    )
+    return layout
 
 
-def _header() -> str:
-    return (
-        f"  {DIM}{'TICKER':<6}  {'PRICE':>10}     {'TICK Δ':>7}  SESSION %{RESET}"
-    )
-
-
-def _divider() -> str:
-    return f"  {DIM}{'─' * 50}{RESET}"
-
-
-# ── main demo ──────────────────────────────────────────────────────────────────
+# ── main ───────────────────────────────────────────────────────────────────────
 
 async def run_demo() -> None:
-    # 1. Factory: returns MarketSimulator when MASSIVE_API_KEY is not set.
     provider = create_market_provider()
+    tickers  = list(INITIAL_TICKERS)
 
-    print(f"\n{BOLD}  FinAlly — Market Data Demo{RESET}")
-    print(_divider())
-    print(f"  Provider  : {BOLD}{type(provider).__name__}{RESET}")
-    print(f"  Tickers   : {', '.join(TICKERS)}")
-    print(f"  Updates   : {N_UPDATES} × {TICK_PAUSE:.2f} s")
-    print(_divider())
-    print()
+    await provider.start(tickers)
 
-    # 2. Start: seeds each ticker in the cache and launches the background loop.
-    await provider.start(TICKERS)
-
-    prev: dict[str, float] = {}
+    prev:    dict[str, float] = {}
+    history: dict[str, deque] = {t: deque(maxlen=SPARKLINE_LEN) for t in tickers}
+    event_msg = ""
 
     try:
-        for i in range(1, N_UPDATES + 1):
-            await asyncio.sleep(TICK_PAUSE)
+        with Live(screen=True, refresh_per_second=4) as live:
+            for i in range(1, N_UPDATES + 1):
+                await asyncio.sleep(TICK_PAUSE)
 
-            # 3. Read: get_all_prices() returns a snapshot of the shared cache.
-            prices = provider.get_all_prices()
+                quotes    = provider.get_all_prices()
+                event_msg = ""
 
-            ts = time.strftime("%H:%M:%S")
-            print(f"  {DIM}update {i:>2}/{N_UPDATES}  {ts}{RESET}")
-            print(_header())
-            print(_divider())
+                # Accumulate price history for sparklines.
+                for ticker in tickers:
+                    q = quotes.get(ticker)
+                    if q:
+                        history[ticker].append(q.price)
 
-            for ticker in TICKERS:
-                quote = prices.get(ticker)
-                if quote:
-                    print(_row(quote, prev.get(ticker)))
-                    prev[ticker] = quote.price
+                # Demo: hot-add AMZN mid-run to show add_ticker().
+                if i == ADD_TICKER_AT and "AMZN" not in tickers:
+                    provider.add_ticker("AMZN")
+                    tickers.append("AMZN")
+                    history["AMZN"] = deque(maxlen=SPARKLINE_LEN)
+                    event_msg = "add_ticker('AMZN') called — new ticker added live"
 
-            # On update 5, hot-add a new ticker to show dynamic addition.
-            if i == 5:
-                new_ticker = "AMZN"
-                provider.add_ticker(new_ticker)
-                TICKERS.append(new_ticker)
-                print(
-                    f"\n  {YELLOW}→ add_ticker('{new_ticker}') called — "
-                    f"appears in next tick{RESET}"
+                renderable = _build_layout(
+                    quotes, prev, history, tickers,
+                    update_num=i,
+                    n_updates=N_UPDATES,
+                    provider_name=type(provider).__name__,
+                    event_msg=event_msg,
                 )
+                live.update(renderable)
 
-            print()
+                # Snapshot prices for next-tick delta calculation.
+                for ticker in tickers:
+                    q = quotes.get(ticker)
+                    if q:
+                        prev[ticker] = q.price
 
+    except KeyboardInterrupt:
+        pass
     finally:
-        # 4. Stop: cancels the asyncio background task cleanly.
         await provider.stop()
 
-    print(_divider())
-    print(f"  {DIM}Provider stopped. Demo complete.{RESET}\n")
+    from rich.console import Console
+    Console().print("\n[dim]Provider stopped. Demo complete.[/dim]\n")
 
 
 if __name__ == "__main__":
