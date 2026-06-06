@@ -107,13 +107,10 @@ class MassiveClient(MarketDataProvider):
                 or 0.0
             )
             prev_close = session.get("previous_close") or price
+            raw_change_pct = session.get("change_percent")
             change_pct = (
-                session.get("change_percent")
-                or (
-                    (price - prev_close) / prev_close * 100
-                    if prev_close
-                    else 0.0
-                )
+                raw_change_pct if raw_change_pct is not None
+                else ((price - prev_close) / prev_close * 100 if prev_close else 0.0)
             )
             timestamp_ms = (
                 last_trade.get("sip_timestamp")
@@ -143,7 +140,7 @@ class MassiveClient(MarketDataProvider):
                 if resp.status_code == 429:
                     wait = 2 ** attempt
                     logger.warning("Rate limited by Massive; backing off %ds", wait)
-                    import time as _time; _time.sleep(wait)
+                    time.sleep(wait)
                     continue
                 resp.raise_for_status()
                 return resp.json()
@@ -151,4 +148,7 @@ class MassiveClient(MarketDataProvider):
                 if attempt == retries - 1:
                     raise
                 logger.warning("Massive request failed (%s); retrying", exc)
-        return {}  # unreachable but satisfies type checker
+        # All retries exhausted on 429 — return empty dict so the caller
+        # keeps the last cached prices rather than crashing.
+        logger.warning("Massive rate-limited for all %d attempts; keeping cached prices", retries)
+        return {}
