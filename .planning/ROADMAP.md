@@ -31,9 +31,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `GET /api/health` returns `{"status": "ok"}` with HTTP 200
   4. Re-starting the backend against an existing database makes no destructive changes — existing data is preserved
 **Plans**: 2 plans
-Plans:
+
+**Wave 1** *(no dependencies)*
 - [ ] 01-01-PLAN.md — SQLite db.py module: SCHEMA_SQL, init_db(), get_db_path(), get_db(), DbDep (TDD — covers DB-01 through DB-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — FastAPI main.py: lifespan wiring, health endpoint, router registration (covers SYS-01)
+
+**Cross-cutting constraints:**
+- `SEED_PRICES.keys()` from `backend/app/market/seed_prices.py` is canonical ticker list for both DB seed and market source start
+- `app.state.price_cache` and `app.state.market_source` — no module-level globals (D-07)
+
 **UI hint**: no
 
 ### Phase 2: Portfolio, Watchlist & Static Serving
