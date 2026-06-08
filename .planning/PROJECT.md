@@ -21,7 +21,7 @@ An AI chat assistant that can read the user's live portfolio and autonomously ex
 
 ### Active
 
-- [ ] SQLite database with lazy initialization (schema creation + seeding on first start)
+- ✓ SQLite database with lazy initialization (schema creation + seeding on first start) — Phase 1
 - [ ] Portfolio REST API (positions, cash, P&L, trade execution, history snapshots)
 - [ ] Watchlist REST API (get, add, remove tickers)
 - [ ] LLM chat endpoint with structured output (message + trades + watchlist changes)
@@ -54,7 +54,8 @@ An AI chat assistant that can read the user's live portfolio and autonomously ex
 
 ## Context
 
-- **Market data phase is complete**: the backend has a working market data engine (`backend/app/market/`), price cache, and SSE endpoint. This is the foundation everything else builds on.
+- **Phase 0 complete**: market data engine (`backend/app/market/`), price cache, and SSE endpoint.
+- **Phase 1 complete**: SQLite DB module (`backend/app/db.py`) and FastAPI entry point (`backend/app/main.py`) — 82 backend tests passing, health endpoint live, DB initialized on startup.
 - **Backend stack**: FastAPI (Python/uv), existing `pyproject.toml` and `uv.lock`. New code extends this project.
 - **Frontend**: Not yet started. Next.js TypeScript, `output: 'export'`, served as static files by FastAPI from `frontend/` build output.
 - **Single origin**: Frontend talks to `/api/*` on the same host — no CORS needed.
@@ -104,4 +105,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-08 after initialization*
+*Last updated: 2026-06-08 after Phase 1 completion*
