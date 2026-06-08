@@ -17,35 +17,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/stream", tags=["streaming"])
 
 
-def create_stream_router(price_cache: PriceCache) -> APIRouter:
-    """Create the SSE streaming router with a reference to the price cache.
+@router.get("/prices")
+async def stream_prices(request: Request) -> StreamingResponse:
+    """SSE endpoint for live price updates.
 
-    This factory pattern lets us inject the PriceCache without globals.
+    Streams all tracked ticker prices every ~500ms. The client connects
+    with EventSource and receives events in the format:
+
+        data: {"AAPL": {"ticker": "AAPL", "price": 190.50, ...}, ...}
+
+    Includes a retry directive so the browser auto-reconnects on
+    disconnection (EventSource built-in behavior).
     """
-
-    @router.get("/prices")
-    async def stream_prices(request: Request) -> StreamingResponse:
-        """SSE endpoint for live price updates.
-
-        Streams all tracked ticker prices every ~500ms. The client connects
-        with EventSource and receives events in the format:
-
-            data: {"AAPL": {"ticker": "AAPL", "price": 190.50, ...}, ...}
-
-        Includes a retry directive so the browser auto-reconnects on
-        disconnection (EventSource built-in behavior).
-        """
-        return StreamingResponse(
-            _generate_events(price_cache, request),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",  # Disable nginx buffering if proxied
-            },
-        )
-
-    return router
+    price_cache: PriceCache = request.app.state.price_cache
+    return StreamingResponse(
+        _generate_events(price_cache, request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering if proxied
+        },
+    )
 
 
 async def _generate_events(

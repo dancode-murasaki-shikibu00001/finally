@@ -50,7 +50,7 @@ Note on the `grep -c` count of 7: The SCHEMA_SQL string contains exactly 6 `CREA
 | T7 | Starting the app initializes the database (init_db runs before requests arrive) | VERIFIED | `lifespan()` calls `init_db()` as its first statement before `yield`; `test_lifespan_startup` PASSES |
 | T8 | Starting the app starts the market data source with SEED_PRICES tickers | VERIFIED | `lifespan()` creates `source = create_market_data_source(cache)`, then `await source.start(list(SEED_PRICES.keys()))` before `yield` |
 | T9 | PriceCache and MarketDataSource are stored on app.state (no module-level globals) | VERIFIED | `app.state.price_cache = cache` and `app.state.market_source = source` confirmed in `main.py`. No module-level variable holding these objects. |
-| T10 | The SSE stream router is wired in and reachable at /api/stream/prices | VERIFIED | `app.include_router(create_stream_router(cache))` in lifespan. Test `test_sse_route_registered` inspects `app.routes` and asserts `"/api/stream/prices" in routes` — PASSES. |
+| T10 | The SSE stream router is wired in and reachable at /api/stream/prices | VERIFIED | `app.include_router(stream_router)` at module level (CR-01 fix applied post-verification). Test `test_sse_route_registered` inspects `app.routes` and asserts `"/api/stream/prices" in routes` — PASSES. Route count confirmed stable at 1 across repeated TestClient lifespans. |
 | T11 | Stopping the app cleanly shuts down the market data source | VERIFIED | `await source.stop()` in lifespan shutdown block (after `yield`) |
 
 **Score: 11/11 truths verified**
@@ -75,7 +75,7 @@ Note on the `grep -c` count of 7: The SCHEMA_SQL string contains exactly 6 `CREA
 | `backend/app/db.py` | `backend/app/market/seed_prices.py` | `from app.market.seed_prices import SEED_PRICES` inside `_seed_default_data()` | WIRED | Local import confirmed at line 97 of `db.py` |
 | `backend/app/db.py` | `db/finally.db` | `os.environ.get("DB_PATH", "db/finally.db")` | WIRED | Confirmed at line 74; `os.makedirs` creates the directory |
 | `backend/app/main.py` | `backend/app/db.py` | `from app.db import init_db` | WIRED | Confirmed at line 10 of `main.py`; called in lifespan startup |
-| `backend/app/main.py` | `backend/app/market/__init__.py` | `from app.market import PriceCache, create_market_data_source, create_stream_router` | WIRED | Confirmed at line 11 of `main.py`; all three symbols used in lifespan |
+| `backend/app/main.py` | `backend/app/market/__init__.py` | `from app.market import PriceCache, create_market_data_source, stream_router` | WIRED | Confirmed at line 11 of `main.py`; `stream_router` included at module level (line 50); `PriceCache` and `create_market_data_source` used in lifespan |
 | `backend/app/main.py` | `app.state` | `app.state.price_cache` and `app.state.market_source` assigned in lifespan | WIRED | Confirmed at lines 33–34 of `main.py` |
 
 ---

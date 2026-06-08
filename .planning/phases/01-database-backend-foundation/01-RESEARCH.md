@@ -56,7 +56,7 @@ Phase 1 wires together the FastAPI application entry point, lazily initializes t
 
 No new external dependencies are needed for this phase. `sqlite3` is part of the Python standard library. The existing `pyproject.toml` already lists `fastapi>=0.115.0` and `uvicorn[standard]>=0.32.0`. FastAPI automatically dispatches `def` (synchronous) route handlers to a thread pool — this is the mechanism that makes the one-connection-per-request pattern safe without `async def`.
 
-The critical pitfalls in this phase are: (1) forgetting `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE` in the schema, which causes startup crashes on an existing database; (2) placing the SSE router include before the stream router factory is called (the router must be created from `create_stream_router(price_cache)` and registered on the app, not imported as a module-level global); (3) using the wrong path for `db/finally.db` — the default must be relative to the project root, not to `backend/`.
+The critical pitfalls in this phase are: (1) forgetting `CREATE TABLE IF NOT EXISTS` and `INSERT OR IGNORE` in the schema, which causes startup crashes on an existing database; (2) calling a stream router factory inside lifespan that mutates a module-level `APIRouter` — this caused CR-01 (route accumulation across `TestClient` lifespans); the fix was `stream_router` at module level with the handler reading `price_cache` from `request.app.state.price_cache`; (3) using the wrong path for `db/finally.db` — the default must be relative to the project root, not to `backend/`.
 
 **Primary recommendation:** Implement `backend/app/db.py` with `init_db()` using `executescript()` for all six `CREATE TABLE IF NOT EXISTS` statements and `INSERT OR IGNORE` for seed data, then wire everything in `backend/app/main.py` using the `@asynccontextmanager` lifespan pattern with `app.state` for shared objects.
 
@@ -139,7 +139,7 @@ FastAPI app (backend/app/main.py)
     │
     ├── GET /api/health  ──────────────────────────→  {"status": "ok"}
     │
-    └── include_router(create_stream_router(app.state.price_cache))
+    └── include_router(stream_router)  # module level; handler reads app.state.price_cache
             └── GET /api/stream/prices  ──────────→  SSE text/event-stream
 ```
 
@@ -211,10 +211,10 @@ async def lifespan(app: FastAPI):
     await source.stop()
 
 app = FastAPI(lifespan=lifespan)
-app.include_router(create_stream_router(???))  # see Pattern 3
+app.include_router(stream_router)  # module level; handler reads app.state.price_cache
 ```
 
-**Note:** `create_stream_router` must be called after the cache exists. See Pattern 3 for the correct wiring.
+**Note:** `stream_router` is registered at module level. The SSE handler reads `price_cache` from `request.app.state.price_cache` at request time — no factory needed. See Pattern 3 for the complete wiring.
 
 ### Pattern 2: SQLite Lazy Initialization
 
@@ -307,16 +307,38 @@ def _seed(conn: sqlite3.Connection) -> None:
 
 **Key:** `INSERT OR IGNORE` is the idempotency mechanism for seed data — it silently skips the insert if the UNIQUE constraint would be violated. This means re-running `init_db()` on an existing seeded DB causes no errors and no data loss. [VERIFIED: https://docs.python.org/3/library/sqlite3.html]
 
-### Pattern 3: SSE Router Wiring
+### Pattern 3: SSE Router Wiring (CR-01 Fix Applied)
 
-**What:** `create_stream_router(price_cache)` is a factory that injects `PriceCache` into the router closure. It must be called after the cache is created. The returned `APIRouter` is included in the app with `app.include_router()`.
+**What:** `stream_router` is a module-level `APIRouter` in `backend/app/market/stream.py`. It is exported from `backend/app/market/__init__.py` and included in the app once at module level with `app.include_router(stream_router)`. The SSE handler accesses `price_cache` via `request.app.state.price_cache` — no factory, no closure, no lifespan-wiring needed for the router itself.
 
-**Critical constraint:** `StaticFiles` must be mounted on the `app` directly (not on `APIRouter`). The SSE router from Phase 0 is an `APIRouter` so it can be included normally with `include_router`. [VERIFIED: https://github.com/fastapi/fastapi/issues/1469]
+**Why this matters:** The original plan proposed `create_stream_router(price_cache)` as a factory called inside lifespan. During Phase 1 execution this was implemented, but code review (CR-01) found that calling a factory inside lifespan caused the module-level `router` singleton to accumulate duplicate route registrations on every `TestClient` lifespan restart (triangular growth: 1 route → 3 → 6 → 10…). Option B was applied: remove the factory, register once at module level, read `price_cache` at request time.
 
-**Example:**
+**Critical constraint:** `StaticFiles` must be mounted on the `app` directly (not on `APIRouter`). The SSE router is an `APIRouter` so it can be included normally with `include_router`.
+
+**Implemented pattern:**
 ```python
-# The correct pattern from backend/app/market/stream.py
-from app.market import PriceCache, create_market_data_source, create_stream_router
+# backend/app/market/stream.py
+router = APIRouter(prefix="/api/stream", tags=["streaming"])
+
+@router.get("/prices")
+async def stream_prices(request: Request) -> StreamingResponse:
+    price_cache: PriceCache = request.app.state.price_cache  # reads from lifespan state
+    return StreamingResponse(
+        _generate_events(price_cache, request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+```
+
+```python
+# backend/app/market/__init__.py
+from .stream import router as stream_router
+__all__ = [..., "stream_router"]
+```
+
+```python
+# backend/app/main.py
+from app.market import PriceCache, create_market_data_source, stream_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -324,38 +346,14 @@ async def lifespan(app: FastAPI):
     cache = PriceCache()
     source = create_market_data_source(cache)
     await source.start(list(SEED_PRICES.keys()))
-    app.state.price_cache = cache
+    app.state.price_cache = cache   # handler reads this at request time
     app.state.market_source = source
-    # Include the stream router AFTER cache is created
-    # Note: include_router at startup is fine; routers are registered, not executed
     yield
     await source.stop()
 
 app = FastAPI(lifespan=lifespan)
-
-# SSE router — created at module level with the cache injected via lifespan
-# But the router must be created after the app is defined.
-# Two valid approaches:
-# Option A: include_router in lifespan (before yield) — works but non-standard
-# Option B: create router lazily via a dependency — more complex
-# Option C: create the router at module level using app.state lookup — not possible pre-lifespan
-#
-# RECOMMENDED: Pass the router to include_router() AFTER app is created,
-# but the cache reference is captured in the closure at lifespan startup time.
-# The stream router's closure over `price_cache` is set during lifespan, so
-# the router can be included at app creation time if the cache is populated by lifespan.
-#
-# Looking at stream.py: the factory registers routes on a module-level `router` object.
-# Call create_stream_router(cache) in lifespan, then app.include_router(stream_router)
-# at module level — but the router needs to be returned and stored first.
-#
-# Simplest correct pattern for Phase 1:
-# 1. Create cache/source in lifespan
-# 2. Call create_stream_router(cache) in lifespan → returns router
-# 3. app.include_router(router) inside lifespan (before yield) — this is valid
+app.include_router(stream_router)  # once at module level — safe because no factory closure
 ```
-
-**Note on stream.py wiring:** Looking at the actual `stream.py`, `create_stream_router(price_cache)` registers routes on a module-level `router` object and returns it. To include it in the app, call `app.include_router(create_stream_router(cache))` inside the lifespan function before `yield`, or call `create_stream_router(cache)` at module level and use that router. [ASSUMED] — the exact approach depends on whether `create_stream_router` can be called at module level before the lifespan runs (it cannot, since `PriceCache` is created in lifespan). The safest approach is to call it inside the lifespan before `yield`.
 
 ### Pattern 4: One-Connection-Per-Request Dependency
 
@@ -443,15 +441,15 @@ def test_health():
 
 **Warning signs:** `finally.db` appears inside `backend/db/` rather than the top-level `db/`.
 
-### Pitfall 2: SSE Router Double-Registration
+### Pitfall 2: SSE Router Route Accumulation (CR-01 — Fixed)
 
-**What goes wrong:** `create_stream_router(price_cache)` registers routes on the module-level `router` object in `stream.py`. If called twice (e.g., once at module import and once in lifespan), routes are registered twice, producing duplicates in OpenAPI docs and potentially double-streaming.
+**What went wrong:** The original `create_stream_router(price_cache)` factory in `stream.py` used `@router.get("/prices")` inside its body, decorating the module-level `router` singleton every time it was called. Calling it inside lifespan meant every `TestClient` lifespan restart accumulated another route registration (1 → 3 → 6 → 10 … triangular growth). FastAPI resolved to the first registered route, making all others dead code, but the bloat was permanent for the process lifetime.
 
-**Why it happens:** `stream.py` uses a module-level `router = APIRouter(...)` and the factory decorates it in-place. Calling the factory twice decorates the same router twice.
+**Why it happened:** The factory closed over a shared singleton instead of creating a fresh `APIRouter`. Called from lifespan, every startup multiplied the route count.
 
-**How to avoid:** Call `create_stream_router(price_cache)` exactly once. Store the returned router in a variable and pass it to `app.include_router()` exactly once.
+**How it was fixed (CR-01):** Removed the factory. `stream.py` registers `@router.get("/prices")` once at module level. The handler reads `price_cache` from `request.app.state.price_cache` at request time. `main.py` calls `app.include_router(stream_router)` once at module level. Route count is permanently 1 regardless of how many times the lifespan runs.
 
-**Warning signs:** OpenAPI docs show `/api/stream/prices` twice.
+**Warning signs:** If this pattern recurs — OpenAPI docs show `/api/stream/prices` multiple times, or `len([r for r in app.routes if getattr(r, 'path', '') == '/api/stream/prices'])` > 1 after multiple `TestClient` lifespans.
 
 ### Pitfall 3: `executescript()` and Transactions
 
@@ -473,15 +471,13 @@ def test_health():
 
 **Warning signs:** Watchlist shows 10 tickers but SSE stream only has 9 (or vice versa).
 
-### Pitfall 5: Lifespan `include_router` Ordering
+### Pitfall 5: `include_router` Ordering — No Longer a Constraint (Resolved by CR-01)
 
-**What goes wrong:** Calling `app.include_router(stream_router)` at module-level (outside lifespan) before `PriceCache` is created. The `create_stream_router` factory captures the `price_cache` reference in a closure — but if `price_cache` doesn't exist yet when the factory is called, this fails.
+**Historical concern:** The original pattern (`create_stream_router(cache)` factory) required `include_router` to be called inside lifespan because `PriceCache` didn't exist at module load time. This restriction caused Pitfall 2 (route accumulation).
 
-**Why it happens:** Trying to keep all `include_router` calls at module level for readability.
+**Resolution:** After CR-01, the SSE handler reads `price_cache` from `request.app.state.price_cache` at request time. The router itself has no dependency on `PriceCache` at registration time. `app.include_router(stream_router)` is now called at module level safely — `PriceCache` will exist on `app.state` by the time any request arrives.
 
-**How to avoid:** Either call `app.include_router(create_stream_router(cache))` inside the lifespan (before `yield`) after the cache is created, or restructure so `create_stream_router` receives the cache via a different injection mechanism.
-
-**Warning signs:** `NameError` or `AttributeError` at import time; `NoneType` errors in SSE stream handler.
+**Pattern for Phase 2+:** All `APIRouter` instances should be registered at module level in `main.py` via `app.include_router(...)`. Handlers that need lifespan-initialized objects should read them from `request.app.state` at request time, not close over them at registration time.
 
 ---
 
@@ -620,6 +616,7 @@ DbDep = Annotated[sqlite3.Connection, Depends(get_db)]
 
 ```python
 # Source: https://fastapi.tiangolo.com/advanced/events/ + PLAN.md §3
+# Note: updated to reflect CR-01 fix — stream_router at module level, not inside lifespan
 """FinAlly FastAPI application entry point."""
 
 from __future__ import annotations
@@ -630,7 +627,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.db import init_db
-from app.market import PriceCache, create_market_data_source, create_stream_router
+from app.market import PriceCache, create_market_data_source, stream_router
 from app.market.seed_prices import SEED_PRICES
 
 logger = logging.getLogger(__name__)
@@ -655,9 +652,6 @@ async def lifespan(app: FastAPI):
     app.state.price_cache = cache
     app.state.market_source = source
 
-    # 4. Wire the SSE stream router now that cache is ready
-    app.include_router(create_stream_router(cache))
-
     yield  # Application is running
 
     # Shutdown
@@ -671,6 +665,8 @@ app = FastAPI(
     description="AI Trading Workstation",
     lifespan=lifespan,
 )
+
+app.include_router(stream_router)  # registered once at module level (CR-01 fix)
 
 
 @app.get("/api/health")

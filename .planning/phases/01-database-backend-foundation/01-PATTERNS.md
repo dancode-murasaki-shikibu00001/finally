@@ -34,7 +34,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.db import init_db
-from app.market import PriceCache, create_market_data_source, create_stream_router
+from app.market import PriceCache, create_market_data_source, stream_router
 from app.market.seed_prices import SEED_PRICES
 
 logger = logging.getLogger(__name__)
@@ -72,9 +72,6 @@ async def lifespan(app: FastAPI):
     app.state.price_cache = cache
     app.state.market_source = source
 
-    # 4. Wire SSE router after cache exists (Pitfall 5 in RESEARCH.md)
-    app.include_router(create_stream_router(cache))
-
     yield  # Application is running
 
     # Shutdown
@@ -88,6 +85,8 @@ app = FastAPI(
     description="AI Trading Workstation",
     lifespan=lifespan,
 )
+
+app.include_router(stream_router)  # registered once at module level (CR-01 fix)
 ```
 
 **Health endpoint pattern** — inline in main.py per D-05:
@@ -499,7 +498,7 @@ All four new files have close analogs in the existing codebase. No files require
 
 ## Critical Wiring Notes for Planner
 
-1. **`create_stream_router(cache)` must be called inside `lifespan` before `yield`** — not at module level. `PriceCache` does not exist until lifespan runs. (RESEARCH.md Pitfall 5; `backend/app/market/stream.py` line 20 shows the factory signature.)
+1. **`stream_router` is registered at module level via `app.include_router(stream_router)` — not inside lifespan.** The SSE handler reads `price_cache` from `request.app.state.price_cache`, which is set during lifespan startup. Calling `include_router` inside lifespan caused route accumulation across `TestClient` lifespans (CR-01 fix; see `backend/app/market/stream.py` line 17 and `backend/app/main.py` line 50).
 
 2. **`executescript()` outside `with conn:` for DDL** — `executescript()` implicitly commits; wrapping it in `with conn:` causes double-commit. Call it directly on the connection object. (RESEARCH.md Pitfall 3.)
 
@@ -507,7 +506,7 @@ All four new files have close analogs in the existing codebase. No files require
 
 4. **`DB_PATH` env var must be overridden in every test that calls `init_db()`** — use `patch.dict(os.environ, {"DB_PATH": str(tmp_path / "test.db")})`. Pattern from `test_factory.py` lines 19-20.
 
-5. **`app.include_router()` inside lifespan is valid** — routes are registered on the router object, not executed. This is confirmed as the correct approach when the router factory requires a runtime object (`PriceCache`) not available at import time. (RESEARCH.md Open Question 1 + Assumption A1.)
+5. **`app.include_router()` at module level is the correct approach** — `stream_router` is a module-level singleton that does NOT close over `PriceCache`. Instead the handler reads `request.app.state.price_cache` at request time, so `include_router` can safely be called before lifespan runs. Including inside lifespan caused triangular route accumulation across `TestClient` lifespans (CR-01 fix).
 
 ---
 

@@ -7,7 +7,7 @@ tags: [fastapi, lifespan, asynccontextmanager, health-endpoint, sse-wiring, tdd]
 # Dependency graph
 requires:
   - "backend/app/db.py: init_db() (from Plan 01)"
-  - "backend/app/market/__init__.py: PriceCache, create_market_data_source, create_stream_router (Phase 0)"
+  - "backend/app/market/__init__.py: PriceCache, create_market_data_source, stream_router (Phase 0)"
   - "backend/app/market/seed_prices.py: SEED_PRICES (Phase 0)"
 provides:
   - "backend/app/main.py: FastAPI app entry point with lifespan, health endpoint, router wiring"
@@ -22,7 +22,7 @@ tech-stack:
   patterns:
     - "asynccontextmanager lifespan pattern (replaces deprecated @app.on_event)"
     - "app.state for shared objects — no module-level globals (D-07)"
-    - "app.include_router(create_stream_router(cache)) inside lifespan before yield (Pitfall 5 avoided)"
+    - "app.include_router(stream_router) at module level; SSE handler reads price_cache from request.app.state.price_cache (CR-01 fix applied post-execution)"
     - "TestClient route-list inspection instead of streaming HTTP call for SSE route test"
     - "TDD RED/GREEN cycle: test file committed first with failing tests, then implementation"
 
@@ -35,7 +35,7 @@ key-files:
 key-decisions:
   - "Lifespan wiring order: init_db() first, then PriceCache, then market source start, then app.state assignment, then SSE router include (D-06)"
   - "No module-level globals for PriceCache or MarketDataSource — stored on app.state (D-07)"
-  - "create_stream_router(cache) called exactly once inside lifespan before yield (prevents double-registration Pitfall 5)"
+  - "stream_router registered once at module level via app.include_router(stream_router); SSE handler reads cache from request.app.state.price_cache (CR-01 fix applied post-execution)"
   - "Health endpoint defined inline in main.py — not a separate router file (D-05)"
   - "SSE route test checks app.routes list rather than making an HTTP call — avoids test hanging on infinite SSE stream"
 
@@ -87,7 +87,7 @@ _TDD plan: test commit first (RED), then implementation commit (GREEN)_
 ## Decisions Made
 
 - Followed all locked decisions from CONTEXT.md (D-04, D-05, D-06, D-07) exactly as specified
-- Called `create_stream_router(cache)` exactly once inside lifespan before yield per Pitfall 5 (prevents double-registration of SSE routes)
+- Stream router wired via `app.include_router(stream_router)` at module level (not inside lifespan); SSE handler reads `price_cache` from `request.app.state.price_cache`. Original lifespan-include approach was changed by CR-01 fix applied post-execution.
 - Used `app.state.price_cache` and `app.state.market_source` per D-07 (no module-level globals)
 - Health endpoint defined inline in `main.py` per D-05 (3 lines, not worth a separate router file)
 
@@ -112,7 +112,7 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-- `backend/app/main.py` is ready for Phase 2 route handlers to be mounted via `app.include_router()` in lifespan
+- `backend/app/main.py` is ready for Phase 2 route handlers to be mounted via `app.include_router()` at module level
 - `app.state.price_cache` is accessible in Phase 2 route handlers via `request.app.state.price_cache`
 - `DbDep` from `db.py` is ready for Phase 2 route handlers to use via `Depends(get_db)`
 - No blockers
@@ -123,7 +123,7 @@ No new security-relevant surface beyond what was planned:
 - GET /api/health: returns static JSON only; no input processing; no server internals exposed (T-02-01 accepted)
 - app.state: internal to Python process; not accessible to end users (T-02-02 accepted)
 - Lifespan startup failure: init_db() is idempotent (tested); market source failure raises exception uvicorn reports (T-02-03 mitigated)
-- SSE router: called exactly once inside lifespan; no double-registration (T-02-04 mitigated)
+- SSE router: registered once at module level; route count confirmed stable at 1 across TestClient lifespans (T-02-04 mitigated; CR-01 fixed post-execution)
 
 ## Self-Check: PASSED
 

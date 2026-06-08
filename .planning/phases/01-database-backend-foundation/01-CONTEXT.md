@@ -44,7 +44,7 @@ Wire up the FastAPI application entry point, lazily initialize the SQLite databa
 - `planning/MARKET_DATA_SUMMARY.md` — Phase 0 summary: what was built, module map, public API, usage patterns for downstream code
 
 ### Existing Backend Code
-- `backend/app/market/__init__.py` — Market data public API: `PriceCache`, `create_market_data_source`, `create_stream_router`
+- `backend/app/market/__init__.py` — Market data public API: `PriceCache`, `create_market_data_source`, `stream_router`
 - `backend/app/market/stream.py` — SSE router factory pattern (model for how Phase 1 wires the stream router into the app)
 - `backend/CLAUDE.md` — Backend developer guide: project setup, market data usage, test commands
 
@@ -58,15 +58,15 @@ Wire up the FastAPI application entry point, lazily initialize the SQLite databa
 
 ### Reusable Assets
 - `create_market_data_source(cache)` — factory in `backend/app/market/factory.py`; returns the correct data source based on `MASSIVE_API_KEY` env var. Phase 1 calls this during lifespan startup.
-- `create_stream_router(price_cache)` — factory in `backend/app/market/stream.py`; returns an `APIRouter` for `GET /api/stream/prices`. Phase 1 includes this router in the app.
-- `PriceCache` — from `backend/app/market/cache.py`; instantiated once during lifespan and passed to both the market source and the stream router.
+- `stream_router` — module-level `APIRouter` exported from `backend/app/market/__init__.py`; included once at app level with `app.include_router(stream_router)` in `main.py`. The SSE handler reads `price_cache` from `request.app.state.price_cache` at request time.
+- `PriceCache` — from `backend/app/market/cache.py`; instantiated once during lifespan and stored on `app.state.price_cache`.
 
 ### Established Patterns
-- **Factory pattern for router injection** — `create_stream_router(price_cache)` shows how shared state (PriceCache) is injected into a router without globals. Phase 1 should follow this pattern for all future routers.
+- **`app.state` pattern for shared objects in route handlers** — `stream_router`'s SSE handler reads `price_cache` from `request.app.state.price_cache`. Phase 2+ routers should follow this pattern for accessing `PriceCache`, `MarketDataSource`, or any lifespan-initialized object.
 - **Module `__init__.py` as public API** — `backend/app/market/__init__.py` exposes only the public surface. `backend/app/db.py` should be the same: clean function exports, no internal details in `__init__.py`.
 
 ### Integration Points
-- `backend/app/main.py` (to be created) — the single integration point that imports `create_market_data_source`, `create_stream_router`, `PriceCache`, and the new `init_db` from `db.py`, then wires them together via the lifespan context manager.
+- `backend/app/main.py` — the single integration point. Imports `create_market_data_source`, `stream_router`, `PriceCache`, and `init_db`. `app.include_router(stream_router)` at module level; lifespan handles `init_db()`, `PriceCache`, and `app.state` assignment.
 - `backend/app/market/seed_prices.py` — contains `DEFAULT_TICKERS` list (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX); the watchlist seed and the market data `start(tickers)` call should both use this list as the source of truth.
 
 </code_context>

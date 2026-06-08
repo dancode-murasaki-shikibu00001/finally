@@ -13,7 +13,7 @@ findings:
   warning: 4
   info: 2
   total: 7
-status: issues_found
+status: cr01_resolved_warnings_open
 ---
 
 # Phase 01: Code Review Report
@@ -31,7 +31,13 @@ Four files were reviewed: the database initialization module (`db.py`), the Fast
 
 ## Critical Issues
 
-### CR-01: `create_stream_router` Mutates a Module-Level Router — Duplicate Routes on Every Lifespan
+### CR-01: `create_stream_router` Mutates a Module-Level Router — Duplicate Routes on Every Lifespan ✓ RESOLVED
+
+**Status:** RESOLVED 2026-06-08 via Option B (design-level fix)
+
+**Fix applied:** Removed `create_stream_router(price_cache)` factory entirely. `stream.py` now declares `router = APIRouter(...)` at module level and registers `@router.get("/prices")` once at module load time. The handler reads `price_cache` from `request.app.state.price_cache` instead of closing over it. `main.py` calls `app.include_router(stream_router)` once at module level (not inside lifespan). Route count confirmed stable at 1 across repeated `TestClient` lifespans. All 82 tests pass post-fix.
+
+Note: The fix suggested in the review below (Option A — create a fresh local router inside the factory) was superseded by Option B which is architecturally cleaner.
 
 **File:** `backend/app/market/stream.py:17,26`
 **Issue:** `stream.py` declares `router = APIRouter(...)` at module scope (line 17). The factory function `create_stream_router()` uses `@router.get("/prices")` inside its body (line 26), which appends a new route to that shared singleton every time the function is called. The function then returns the same singleton. In `main.py` line 37, `app.include_router(create_stream_router(cache))` is called inside the lifespan context, which runs each time the application starts.

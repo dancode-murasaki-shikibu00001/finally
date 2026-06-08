@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.db import init_db
-from app.market import PriceCache, create_market_data_source, create_stream_router
+from app.market import PriceCache, create_market_data_source, stream_router
 from app.market.seed_prices import SEED_PRICES
 
 logger = logging.getLogger(__name__)
@@ -33,9 +33,6 @@ async def lifespan(app: FastAPI):
     app.state.price_cache = cache
     app.state.market_source = source
 
-    # 4. Wire SSE router after cache exists — called exactly once inside lifespan (Pitfall 5)
-    app.include_router(create_stream_router(cache))
-
     yield  # Application is running
 
     # Shutdown
@@ -49,6 +46,8 @@ app = FastAPI(
     description="AI Trading Workstation",
     lifespan=lifespan,
 )
+
+app.include_router(stream_router)
 
 
 @app.get("/api/health")

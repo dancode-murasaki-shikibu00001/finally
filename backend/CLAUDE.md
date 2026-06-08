@@ -34,10 +34,12 @@ from app.market import PriceCache, PriceUpdate, MarketDataSource, create_market_
 ### SSE Streaming
 
 ```python
-from app.market import create_stream_router
+from app.market import stream_router
 
-router = create_stream_router(price_cache)  # Returns FastAPI APIRouter
+# stream_router is a module-level APIRouter; include it once at app level:
+#   app.include_router(stream_router)
 # Endpoint: GET /api/stream/prices (text/event-stream)
+# The handler reads price_cache from request.app.state.price_cache
 ```
 
 ### Seed Data

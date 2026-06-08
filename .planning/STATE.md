@@ -51,7 +51,7 @@ Recent decisions affecting current work:
 - executescript() must be called outside `with conn:` for DDL (double-commit pitfall avoided)
 - Plan 01-02 complete: `backend/app/main.py` has FastAPI app with asynccontextmanager lifespan; GET /api/health returns {"status": "ok"}; SYS-01 done
 - app.state pattern established: price_cache and market_source stored on app.state (no module-level globals, D-07)
-- create_stream_router(cache) called exactly once inside lifespan before yield (Pitfall 5 avoided)
+- stream_router exported from app.market; app.include_router(stream_router) called once at module level in main.py; SSE handler reads price_cache from request.app.state.price_cache (CR-01 fix applied post-Phase 1)
 - Phase 1 complete: all 82 backend tests passing (73 market + 6 DB + 3 main)
 
 ### Pending Todos
