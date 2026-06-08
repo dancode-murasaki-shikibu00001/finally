@@ -4,8 +4,6 @@ import os
 import sqlite3
 from unittest.mock import patch
 
-import pytest
-
 from app.db import get_db_path, init_db
 
 

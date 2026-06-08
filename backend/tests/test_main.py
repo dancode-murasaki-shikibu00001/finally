@@ -3,7 +3,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
