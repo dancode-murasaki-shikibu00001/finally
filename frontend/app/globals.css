@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white font-mono;
+    font-size: 13px;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #21262d;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #30363d;
+  }
+}
+
+@layer utilities {
+  .price-flash-up {
+    animation: flashGreen 0.6s ease-out forwards;
+  }
+
+  .price-flash-down {
+    animation: flashRed 0.6s ease-out forwards;
+  }
+}
+
+@keyframes flashGreen {
+  0% {
+    background-color: rgba(63, 185, 80, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flashRed {
+  0% {
+    background-color: rgba(248, 81, 73, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes dots {
+  0%, 20% {
+    content: '.';
+  }
+  40% {
+    content: '..';
+  }
+  60%, 100% {
+    content: '...';
+  }
+}
+
+.loading-dots::after {
+  content: '...';
+  animation: loadingDots 1.4s ease-in-out infinite;
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+}
+
+@keyframes loadingDots {
+  0% { content: '.'; }
+  33% { content: '..'; }
+  66%, 100% { content: '...'; }
+}
+
+/* Terminal-style panel headers */
+.panel-header {
+  @apply text-xs font-bold uppercase tracking-widest text-text-muted px-3 py-2 bg-surface border-b border-border;
+}
+
+/* Tight table styles */
+.terminal-table {
+  @apply w-full text-xs;
+}
+
+.terminal-table th {
+  @apply text-text-muted font-normal uppercase tracking-wider px-2 py-1 text-right border-b border-border;
+}
+
+.terminal-table th:first-child {
+  @apply text-left;
+}
+
+.terminal-table td {
+  @apply px-2 py-1 text-right border-b border-border/50;
+}
+
+.terminal-table td:first-child {
+  @apply text-left;
+}
+
+.terminal-table tbody tr:hover {
+  @apply bg-surface-2;
+}
+
+/* Glow effect for accent elements */
+.accent-glow {
+  text-shadow: 0 0 8px rgba(236, 173, 10, 0.5);
+}
+
+/* Panel container */
+.panel {
+  @apply bg-surface border border-border rounded overflow-hidden;
+}

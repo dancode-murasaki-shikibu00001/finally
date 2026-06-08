@@ -205,3 +205,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ── FinAlly project-specific ─────────────────────────────────────────────────
+
+# Database (runtime file, never commit)
+db/finally.db
+
+# Frontend build output
+frontend/out/
+frontend/.next/
+frontend/node_modules/
+
+# Backend virtual environment
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
