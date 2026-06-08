@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 ## Current Position
 
 Phase: 1 of 6 (Database & Backend Foundation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-06-08 — Plan 01-01 complete (SQLite db module)
+Plan: 2 of 2 in current phase (phase complete)
+Status: Phase 1 complete — ready for Phase 2
+Last activity: 2026-06-08 — Plan 01-02 complete (FastAPI main.py + health endpoint)
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [██░░░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 4 min
-- Total execution time: 0.07 hours
+- Total plans completed: 2
+- Average duration: 6 min
+- Total execution time: 0.20 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 1 | 1 | 4 min | 4 min |
+| Phase 1 | 2 | 12 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 4 min
+- Last 5 plans: 4 min, 8 min
 - Trend: baseline
 
 *Updated after each plan completion*
@@ -49,6 +49,10 @@ Recent decisions affecting current work:
 - Plan 01-01 complete: `backend/app/db.py` has SCHEMA_SQL (6 tables), init_db(), get_db_path(), get_db(), DbDep, DEFAULT_USER_ID; TDD cycle passed
 - DbDep pattern established: `Annotated[sqlite3.Connection, Depends(get_db)]` for Phase 2+ route handlers
 - executescript() must be called outside `with conn:` for DDL (double-commit pitfall avoided)
+- Plan 01-02 complete: `backend/app/main.py` has FastAPI app with asynccontextmanager lifespan; GET /api/health returns {"status": "ok"}; SYS-01 done
+- app.state pattern established: price_cache and market_source stored on app.state (no module-level globals, D-07)
+- create_stream_router(cache) called exactly once inside lifespan before yield (Pitfall 5 avoided)
+- Phase 1 complete: all 82 backend tests passing (73 market + 6 DB + 3 main)
 
 ### Pending Todos
 
@@ -67,5 +71,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-06-08
-Stopped at: Plan 01-01 complete — Plan 01-02 (main.py + health endpoint) ready to execute next
+Stopped at: Plan 01-02 complete — Phase 1 done; Phase 2 (Portfolio, Watchlist & Static Serving) ready to plan/execute next
 Resume file: None
