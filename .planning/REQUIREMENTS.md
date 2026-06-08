@@ -18,13 +18,13 @@ The following requirements are already shipped and validated:
 
 ### Database (DB)
 
-- [ ] **DB-01**: Backend lazily initializes SQLite at `db/finally.db` on startup — creates schema and seeds data if file is absent or tables are missing
-- [ ] **DB-02**: `users_profile` table stores cash balance (default $10,000) with `user_id` column defaulting to `"default"`
-- [ ] **DB-03**: `watchlist` table stores watched tickers with unique constraint on `(user_id, ticker)`; seeded with 10 default tickers (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX)
-- [ ] **DB-04**: `positions` table stores current holdings (ticker, quantity, avg\_cost) with unique constraint on `(user_id, ticker)`
-- [ ] **DB-05**: `trades` table is an append-only log of all executed trades (side, quantity, price, executed\_at)
-- [ ] **DB-06**: `portfolio_snapshots` table records total portfolio value over time for the P&L chart
-- [ ] **DB-07**: `chat_messages` table stores conversation history with role, content, and JSON actions field
+- [x] **DB-01**: Backend lazily initializes SQLite at `db/finally.db` on startup — creates schema and seeds data if file is absent or tables are missing
+- [x] **DB-02**: `users_profile` table stores cash balance (default $10,000) with `user_id` column defaulting to `"default"`
+- [x] **DB-03**: `watchlist` table stores watched tickers with unique constraint on `(user_id, ticker)`; seeded with 10 default tickers (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX)
+- [x] **DB-04**: `positions` table stores current holdings (ticker, quantity, avg\_cost) with unique constraint on `(user_id, ticker)`
+- [x] **DB-05**: `trades` table is an append-only log of all executed trades (side, quantity, price, executed\_at)
+- [x] **DB-06**: `portfolio_snapshots` table records total portfolio value over time for the P&L chart
+- [x] **DB-07**: `chat_messages` table stores conversation history with role, content, and JSON actions field
 
 ### Portfolio (PORT)
 

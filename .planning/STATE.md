@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-06-08)
 ## Current Position
 
 Phase: 1 of 6 (Database & Backend Foundation)
-Plan: 0 of 2 in current phase
-Status: Ready to execute
-Last activity: 2026-06-08 — Phase 1 planned (2 plans, 2 waves)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-06-08 — Plan 01-01 complete (SQLite db module)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 8%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 4 min
+- Total execution time: 0.07 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| Phase 1 | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
-- Trend: -
+- Last 5 plans: 4 min
+- Trend: baseline
 
 *Updated after each plan completion*
 
@@ -46,6 +46,9 @@ Recent decisions affecting current work:
 - Architecture: Single FastAPI container on port 8000 serves both static Next.js export and all `/api/*` routes
 - DB: SQLite lazy init — no migration step; schema + seed on first start
 - LLM: LiteLLM → OpenRouter → `openrouter/openai/gpt-oss-120b` via Cerebras inference; use cerebras-inference skill pattern
+- Plan 01-01 complete: `backend/app/db.py` has SCHEMA_SQL (6 tables), init_db(), get_db_path(), get_db(), DbDep, DEFAULT_USER_ID; TDD cycle passed
+- DbDep pattern established: `Annotated[sqlite3.Connection, Depends(get_db)]` for Phase 2+ route handlers
+- executescript() must be called outside `with conn:` for DDL (double-commit pitfall avoided)
 
 ### Pending Todos
 
@@ -64,5 +67,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-06-08
-Stopped at: Phase 1 planned — ready to execute
+Stopped at: Plan 01-01 complete — Plan 01-02 (main.py + health endpoint) ready to execute next
 Resume file: None
