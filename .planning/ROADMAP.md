@@ -30,7 +30,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. The seeded database contains one user profile with $10,000 cash and ten default tickers in the watchlist (AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX)
   3. `GET /api/health` returns `{"status": "ok"}` with HTTP 200
   4. Re-starting the backend against an existing database makes no destructive changes — existing data is preserved
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — SQLite db.py module: SCHEMA_SQL, init_db(), get_db_path(), get_db(), DbDep (TDD — covers DB-01 through DB-07)
+- [ ] 01-02-PLAN.md — FastAPI main.py: lifespan wiring, health endpoint, router registration (covers SYS-01)
 **UI hint**: no
 
 ### Phase 2: Portfolio, Watchlist & Static Serving
@@ -106,7 +109,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Market Data (DONE) | - | Complete | 2026-06-08 |
-| 1. Database & Backend Foundation | 0/? | Not started | - |
+| 1. Database & Backend Foundation | 0/2 | Not started | - |
 | 2. Portfolio, Watchlist & Static Serving | 0/? | Not started | - |
 | 3. LLM Chat Integration | 0/? | Not started | - |
 | 4. Frontend | 0/? | Not started | - |
