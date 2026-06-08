@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** An AI chat assistant that can read the user's live portfolio and autonomously execute trades and watchlist changes through natural language.
-**Current focus:** Phase 1 — Database & Backend Foundation
+**Current focus:** Phase 2 — Portfolio, Watchlist & Static Serving
 
 ## Current Position
 

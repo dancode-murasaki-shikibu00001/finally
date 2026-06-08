@@ -12,7 +12,7 @@ Phase 0 (market data) is complete. The remaining 48 requirements span six phases
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Database & Backend Foundation** - SQLite schema, lazy init, seed data, and health endpoint
+- [x] **Phase 1: Database & Backend Foundation** - SQLite schema, lazy init, seed data, and health endpoint ✓ 2026-06-08
 - [ ] **Phase 2: Portfolio, Watchlist & Static Serving** - REST APIs for portfolio and watchlist, snapshot background task, static file serving
 - [ ] **Phase 3: LLM Chat Integration** - Chat endpoint, LiteLLM/OpenRouter structured output, auto-execution, mock mode
 - [ ] **Phase 4: Frontend** - Full Next.js TypeScript UI — watchlist, charts, heatmap, trade bar, AI chat panel

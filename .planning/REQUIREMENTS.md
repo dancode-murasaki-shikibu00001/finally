@@ -52,7 +52,7 @@ The following requirements are already shipped and validated:
 
 ### System (SYS)
 
-- [ ] **SYS-01**: `GET /api/health` returns `{"status": "ok"}` for Docker health check and deployment readiness
+- [x] **SYS-01**: `GET /api/health` returns `{"status": "ok"}` for Docker health check and deployment readiness
 - [ ] **SYS-02**: FastAPI serves the Next.js static export from a `static/` directory, mounting it at `/` with SPA fallback
 
 ### Frontend (FRONT)
