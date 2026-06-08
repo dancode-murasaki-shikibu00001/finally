@@ -1,0 +1,35 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/dist/
+**/.venv/
+**/.pytest_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+
+# Git
+.git/
+.gitignore
+
+# Local env and DB
+.env
+db/finally.db
+
+# Planning docs (not needed in image)
+planning/
+
+# Editor
+.vscode/
+.idea/
+
+# Local AI/tooling metadata
+.claude/
+.codex/
+.agents/
+.planning/
+
+# Frontend generated output
+frontend/out/
