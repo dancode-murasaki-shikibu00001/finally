@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    volumes:
+      - finally-test-data:/app/db
+    environment:
+      - LLM_MOCK=true
+      - MASSIVE_API_KEY=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.48.0-jammy
+    working_dir: /tests
+    volumes:
+      - ./:/tests
+      - playwright-results:/tests/test-results
+    environment:
+      - BASE_URL=http://app:8000
+      - CI=true
+    depends_on:
+      app:
+        condition: service_healthy
+    command: npx playwright test --reporter=list
+
+volumes:
+  finally-test-data:
+  playwright-results:

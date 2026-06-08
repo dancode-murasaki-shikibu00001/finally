@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
-from app.db import init_db
+from app.db import get_db_path, init_db
 from app.market import PriceCache, create_market_data_source, stream_router
 from app.market.seed_prices import SEED_PRICES
 from app.routers import chat_router, portfolio_router, watchlist_router
@@ -65,6 +67,31 @@ app.include_router(chat_router)
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.post("/api/debug/reset")
+async def debug_reset(request: Request):
+    """Reset DB to initial seed state. Only available when LLM_MOCK=true (test mode)."""
+    if os.environ.get("LLM_MOCK", "").lower() != "true":
+        raise HTTPException(status_code=403, detail="Only available in test mode")
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript("""
+            DROP TABLE IF EXISTS users_profile;
+            DROP TABLE IF EXISTS watchlist;
+            DROP TABLE IF EXISTS positions;
+            DROP TABLE IF EXISTS trades;
+            DROP TABLE IF EXISTS portfolio_snapshots;
+            DROP TABLE IF EXISTS chat_messages;
+        """)
+    finally:
+        conn.close()
+    init_db()
+    # Re-add seed tickers to market source so prices flow after any remove_ticker calls
+    for ticker in SEED_PRICES:
+        await request.app.state.market_source.add_ticker(ticker)
+    return {"ok": True}
 
 
 # Serve the Next.js static export — must be mounted LAST so API routes take priority.

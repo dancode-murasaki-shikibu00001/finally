@@ -226,3 +226,14 @@ Thumbs.db
 
 # ── GSD generated/local files ────────────────────────────────────────────────
 .claude/get-shit-done/bin/lib/
+
+# ── Phase 6 test/build generated files ───────────────────────────────────────
+backend/static/
+test/node_modules/
+test/test-results/
+test/playwright-report/
+playwright-report/
+test-results/
+coverage/
+frontend/coverage/
+.nyc_output/
