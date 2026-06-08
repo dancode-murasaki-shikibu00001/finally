@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -205,3 +205,24 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ── FinAlly frontend generated files ─────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# ── Python generated files ───────────────────────────────────────────────────
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+
+# ── Runtime database ─────────────────────────────────────────────────────────
+db/finally.db
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── GSD generated/local files ────────────────────────────────────────────────
+.claude/get-shit-done/bin/lib/

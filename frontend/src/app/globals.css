@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --border: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #7d8590;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #ecad0a;
+  --blue: #209dd7;
+  --purple: #753991;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Price flash animations */
+@keyframes flash-up {
+  0% {
+    background-color: rgba(63, 185, 80, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-down {
+  0% {
+    background-color: rgba(248, 81, 73, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-up {
+  animation: flash-up 0.6s ease-out;
+}
+
+.flash-down {
+  animation: flash-down 0.6s ease-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Recharts overrides */
+.recharts-tooltip-wrapper {
+  outline: none;
+}

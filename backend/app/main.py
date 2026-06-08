@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
 from app.market import PriceCache, create_market_data_source, stream_router
@@ -63,3 +65,10 @@ app.include_router(chat_router)
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+# Serve the Next.js static export — must be mounted LAST so API routes take priority.
+# The `static/` directory is populated by the Docker multi-stage build.
+_static_dir = Path(__file__).parent.parent / "static"
+if _static_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
