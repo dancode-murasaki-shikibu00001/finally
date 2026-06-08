@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -47,6 +48,120 @@ class TradeResponse(BaseModel):
     quantity: float
     price: float
     cash_balance: float
+
+
+@dataclass
+class TradeResult:
+    trade_id: str
+    ticker: str
+    side: str
+    quantity: float
+    price: float
+    cash_balance: float
+
+
+class TradeError(ValueError):
+    """Raised by execute_trade_logic when a trade cannot be completed."""
+
+
+def execute_trade_logic(
+    conn: sqlite3.Connection,
+    cache,
+    ticker: str,
+    side: str,
+    quantity: float,
+    user_id: str = DEFAULT_USER_ID,
+) -> TradeResult:
+    """Execute a market-order trade and persist all DB changes atomically.
+
+    Raises TradeError with a human-readable message on any validation failure.
+    The caller is responsible for wrapping this in a DB transaction if needed
+    (this function opens its own ``with conn:`` block).
+    """
+    ticker = ticker.upper()
+    side = side.lower()
+
+    if side not in ("buy", "sell"):
+        raise TradeError("side must be 'buy' or 'sell'")
+    if quantity <= 0:
+        raise TradeError("quantity must be positive")
+
+    current_price = cache.get_price(ticker)
+    if current_price is None:
+        raise TradeError(f"No price available for {ticker}")
+
+    row = conn.execute(
+        "SELECT cash_balance FROM users_profile WHERE id = ?", (user_id,)
+    ).fetchone()
+    cash_balance = row["cash_balance"] if row else 10000.0
+
+    pos_row = conn.execute(
+        "SELECT quantity, avg_cost FROM positions WHERE user_id = ? AND ticker = ?",
+        (user_id, ticker),
+    ).fetchone()
+    current_quantity = pos_row["quantity"] if pos_row else 0.0
+    current_avg_cost = pos_row["avg_cost"] if pos_row else 0.0
+
+    if side == "buy":
+        cost = quantity * current_price
+        if cost > cash_balance:
+            raise TradeError(
+                f"Insufficient funds: need ${cost:.2f}, have ${cash_balance:.2f}"
+            )
+        new_cash = cash_balance - cost
+        new_quantity = current_quantity + quantity
+        new_avg_cost = (
+            (current_quantity * current_avg_cost + quantity * current_price) / new_quantity
+        )
+    else:
+        if quantity > current_quantity:
+            raise TradeError(
+                f"Insufficient shares: need {quantity}, have {current_quantity}"
+            )
+        new_cash = cash_balance + quantity * current_price
+        new_quantity = current_quantity - quantity
+        new_avg_cost = current_avg_cost
+
+    now = datetime.now(timezone.utc).isoformat()
+    trade_id = str(uuid.uuid4())
+
+    with conn:
+        conn.execute(
+            "UPDATE users_profile SET cash_balance = ? WHERE id = ?",
+            (new_cash, user_id),
+        )
+        if new_quantity > 0:
+            conn.execute(
+                """
+                INSERT INTO positions (id, user_id, ticker, quantity, avg_cost, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, ticker) DO UPDATE SET
+                    quantity = excluded.quantity,
+                    avg_cost = excluded.avg_cost,
+                    updated_at = excluded.updated_at
+                """,
+                (str(uuid.uuid4()), user_id, ticker, new_quantity, new_avg_cost, now),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM positions WHERE user_id = ? AND ticker = ?",
+                (user_id, ticker),
+            )
+        conn.execute(
+            "INSERT INTO trades (id, user_id, ticker, side, quantity, price, executed_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (trade_id, user_id, ticker, side, quantity, current_price, now),
+        )
+        _record_snapshot(conn, user_id, new_cash, now, cache)
+
+    return TradeResult(
+        trade_id=trade_id,
+        ticker=ticker,
+        side=side,
+        quantity=quantity,
+        price=current_price,
+        cash_balance=round(new_cash, 2),
+    )
 
 
 @router.get("", response_model=PortfolioResponse)
@@ -103,94 +218,25 @@ async def get_portfolio(request: Request, db: DbDep) -> PortfolioResponse:
 
 @router.post("/trade", status_code=status.HTTP_201_CREATED, response_model=TradeResponse)
 async def execute_trade(trade: TradeRequest, request: Request, db: DbDep) -> TradeResponse:
-    cache = request.app.state.price_cache
-    user_id = DEFAULT_USER_ID
-
-    ticker = trade.ticker.upper()
-    side = trade.side.lower()
-    quantity = trade.quantity
-
-    if side not in ("buy", "sell"):
-        raise HTTPException(status_code=400, detail="side must be 'buy' or 'sell'")
-    if quantity <= 0:
-        raise HTTPException(status_code=400, detail="quantity must be positive")
-
-    current_price = cache.get_price(ticker)
-    if current_price is None:
-        raise HTTPException(status_code=400, detail=f"No price available for {ticker}")
-
-    row = db.execute(
-        "SELECT cash_balance FROM users_profile WHERE id = ?", (user_id,)
-    ).fetchone()
-    cash_balance = row["cash_balance"] if row else 10000.0
-
-    pos_row = db.execute(
-        "SELECT quantity, avg_cost FROM positions WHERE user_id = ? AND ticker = ?",
-        (user_id, ticker),
-    ).fetchone()
-    current_quantity = pos_row["quantity"] if pos_row else 0.0
-    current_avg_cost = pos_row["avg_cost"] if pos_row else 0.0
-
-    if side == "buy":
-        cost = quantity * current_price
-        if cost > cash_balance:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient funds: need ${cost:.2f}, have ${cash_balance:.2f}",
-            )
-        new_cash = cash_balance - cost
-        new_quantity = current_quantity + quantity
-        new_avg_cost = (current_quantity * current_avg_cost + quantity * current_price) / new_quantity
-    else:
-        if quantity > current_quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient shares: need {quantity}, have {current_quantity}",
-            )
-        new_cash = cash_balance + quantity * current_price
-        new_quantity = current_quantity - quantity
-        new_avg_cost = current_avg_cost
-
-    now = datetime.now(timezone.utc).isoformat()
-    trade_id = str(uuid.uuid4())
-
-    with db:
-        db.execute(
-            "UPDATE users_profile SET cash_balance = ? WHERE id = ?",
-            (new_cash, user_id),
+    try:
+        result = execute_trade_logic(
+            conn=db,
+            cache=request.app.state.price_cache,
+            ticker=trade.ticker,
+            side=trade.side,
+            quantity=trade.quantity,
         )
-        if new_quantity > 0:
-            db.execute(
-                """
-                INSERT INTO positions (id, user_id, ticker, quantity, avg_cost, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id, ticker) DO UPDATE SET
-                    quantity = excluded.quantity,
-                    avg_cost = excluded.avg_cost,
-                    updated_at = excluded.updated_at
-                """,
-                (str(uuid.uuid4()), user_id, ticker, new_quantity, new_avg_cost, now),
-            )
-        else:
-            db.execute(
-                "DELETE FROM positions WHERE user_id = ? AND ticker = ?",
-                (user_id, ticker),
-            )
-        db.execute(
-            "INSERT INTO trades (id, user_id, ticker, side, quantity, price, executed_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (trade_id, user_id, ticker, side, quantity, current_price, now),
-        )
-        _record_snapshot(db, user_id, new_cash, now, cache)
+    except TradeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return TradeResponse(
         ok=True,
-        trade_id=trade_id,
-        ticker=ticker,
-        side=side,
-        quantity=quantity,
-        price=current_price,
-        cash_balance=round(new_cash, 2),
+        trade_id=result.trade_id,
+        ticker=result.ticker,
+        side=result.side,
+        quantity=result.quantity,
+        price=result.price,
+        cash_balance=result.cash_balance,
     )
 
 

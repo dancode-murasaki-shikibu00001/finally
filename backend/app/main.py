@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from app.db import init_db
 from app.market import PriceCache, create_market_data_source, stream_router
 from app.market.seed_prices import SEED_PRICES
-from app.routers import portfolio_router, watchlist_router
+from app.routers import chat_router, portfolio_router, watchlist_router
 from app.snapshots import snapshot_task
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ app = FastAPI(
 app.include_router(stream_router)
 app.include_router(portfolio_router)
 app.include_router(watchlist_router)
+app.include_router(chat_router)
 
 
 @app.get("/api/health")
