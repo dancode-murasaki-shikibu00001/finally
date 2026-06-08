@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-06-08)
 
 **Core value:** An AI chat assistant that can read the user's live portfolio and autonomously execute trades and watchlist changes through natural language.
-**Current focus:** Phase 2 — Portfolio, Watchlist & Static Serving
+**Current focus:** All phases complete — implementation finished
 
 ## Current Position
 
-Phase: 1 of 6 (Database & Backend Foundation)
-Plan: 2 of 2 in current phase (phase complete)
-Status: Phase 1 complete — ready for Phase 2
-Last activity: 2026-06-08 — Plan 01-02 complete (FastAPI main.py + health endpoint)
+Phase: 6 of 6 (Testing)
+Plan: all plans complete
+Status: All phases complete — project fully implemented
+Last activity: 2026-06-08 — Phase 6 complete (backend tests, frontend tests, E2E Playwright tests)
 
-Progress: [██░░░░░░░░] 17%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 6 min
-- Total execution time: 0.20 hours
+- Total plans completed: all
+- Total phases completed: 6 of 6
 
 **By Phase:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| Phase 1 | 2 | 12 min | 6 min |
-
-**Recent Trend:**
-- Last 5 plans: 4 min, 8 min
-- Trend: baseline
+| Phase | Status | Completed |
+|-------|--------|-----------|
+| Phase 0 | Complete | 2026-06-08 |
+| Phase 1 | Complete | 2026-06-08 |
+| Phase 2 | Complete | 2026-06-08 |
+| Phase 3 | Complete | 2026-06-08 |
+| Phase 4 | Complete | 2026-06-08 |
+| Phase 5 | Complete | 2026-06-08 |
+| Phase 6 | Complete | 2026-06-08 |
 
 *Updated after each plan completion*
 
@@ -39,28 +40,34 @@ Progress: [██░░░░░░░░] 17%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Phase 0 complete: market data simulator, Massive API client, price cache, and SSE endpoint are fully built in `backend/app/market/`
+- Phase 0 complete: market data simulator, Massive API client, price cache, and SSE endpoint fully built in `backend/app/market/`
 - Architecture: Single FastAPI container on port 8000 serves both static Next.js export and all `/api/*` routes
 - DB: SQLite lazy init — no migration step; schema + seed on first start
-- LLM: LiteLLM → OpenRouter → `openrouter/openai/gpt-oss-120b` via Cerebras inference; use cerebras-inference skill pattern
-- Plan 01-01 complete: `backend/app/db.py` has SCHEMA_SQL (6 tables), init_db(), get_db_path(), get_db(), DbDep, DEFAULT_USER_ID; TDD cycle passed
-- DbDep pattern established: `Annotated[sqlite3.Connection, Depends(get_db)]` for Phase 2+ route handlers
-- executescript() must be called outside `with conn:` for DDL (double-commit pitfall avoided)
-- Plan 01-02 complete: `backend/app/main.py` has FastAPI app with asynccontextmanager lifespan; GET /api/health returns {"status": "ok"}; SYS-01 done
-- app.state pattern established: price_cache and market_source stored on app.state (no module-level globals, D-07)
-- stream_router exported from app.market; app.include_router(stream_router) called once at module level in main.py; SSE handler reads price_cache from request.app.state.price_cache (CR-01 fix applied post-Phase 1)
-- Phase 1 complete: all 82 backend tests passing (73 market + 6 DB + 3 main)
+- LLM: LiteLLM → OpenRouter → `openrouter/openai/gpt-oss-120b` via Cerebras inference
+- Phase 1 complete: SQLite schema (6 tables), init_db(), get_db(), DbDep, health endpoint; 82 backend tests passing
+- Phase 2 complete: portfolio REST (GET/POST/history), watchlist REST (GET/POST/DELETE), snapshot background task, static file serving; all tests passing
+- Phase 3 complete: POST /api/chat with LiteLLM/OpenRouter structured output, auto-execution of trades and watchlist changes, LLM_MOCK=true mode, chat history persistence
+- Phase 4 complete: Full Next.js TypeScript UI — watchlist panel with price flash + sparklines, main chart (lightweight-charts), portfolio heatmap (recharts treemap), P&L chart, positions table, trade bar, AI chat panel, header with live connection status
+- Phase 5 complete: Multi-stage Dockerfile (Node→Python), docker-compose.yml, start/stop scripts (mac + windows), .env.example
+- Phase 6 complete: 133 backend pytest tests, 52 frontend Jest/RTL tests (5 component suites), 18 E2E Playwright tests with hermetic isolation via /api/debug/reset; test/docker-compose.test.yml for CI
+
+### Latest Verification Results
+
+- Backend pytest: **133 passed** (commit e1fd09a)
+- Frontend Jest/RTL: **52 passed** (commit e1fd09a)
+- E2E Playwright: **18 passed**, confirmed twice (hermetic isolation verified)
+
+### Latest Implementation Commit
+
+`e1fd09a` — Implement Phase 6 testing
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Deferred Items
 
@@ -71,5 +78,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-06-08
-Stopped at: Plan 01-02 complete — Phase 1 done; Phase 2 (Portfolio, Watchlist & Static Serving) ready to plan/execute next
+Stopped at: Phase 6 complete — all phases implemented and tested
 Resume file: None
