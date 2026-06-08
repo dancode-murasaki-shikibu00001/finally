@@ -117,24 +117,70 @@ The following requirements are already shipped and validated:
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 through DB-07 | Phase 1 | Pending |
-| PORT-01 through PORT-04 | Phase 2 | Pending |
-| WTCH-01 through WTCH-03 | Phase 2 | Pending |
-| SYS-01 through SYS-02 | Phase 2 | Pending |
-| CHAT-01 through CHAT-08 | Phase 3 | Pending |
-| FRONT-01 through FRONT-14 | Phase 4 | Pending |
-| DOCK-01 through DOCK-06 | Phase 5 | Pending |
-| TEST-01 through TEST-04 | Phase 6 | Pending |
+| DB-01 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-02 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-03 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-04 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-05 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-06 | Phase 1 — Database & Backend Foundation | Pending |
+| DB-07 | Phase 1 — Database & Backend Foundation | Pending |
+| SYS-01 | Phase 1 — Database & Backend Foundation | Pending |
+| PORT-01 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| PORT-02 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| PORT-03 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| PORT-04 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| WTCH-01 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| WTCH-02 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| WTCH-03 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| SYS-02 | Phase 2 — Portfolio, Watchlist & Static Serving | Pending |
+| CHAT-01 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-02 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-03 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-04 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-05 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-06 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-07 | Phase 3 — LLM Chat Integration | Pending |
+| CHAT-08 | Phase 3 — LLM Chat Integration | Pending |
+| FRONT-01 | Phase 4 — Frontend | Pending |
+| FRONT-02 | Phase 4 — Frontend | Pending |
+| FRONT-03 | Phase 4 — Frontend | Pending |
+| FRONT-04 | Phase 4 — Frontend | Pending |
+| FRONT-05 | Phase 4 — Frontend | Pending |
+| FRONT-06 | Phase 4 — Frontend | Pending |
+| FRONT-07 | Phase 4 — Frontend | Pending |
+| FRONT-08 | Phase 4 — Frontend | Pending |
+| FRONT-09 | Phase 4 — Frontend | Pending |
+| FRONT-10 | Phase 4 — Frontend | Pending |
+| FRONT-11 | Phase 4 — Frontend | Pending |
+| FRONT-12 | Phase 4 — Frontend | Pending |
+| FRONT-13 | Phase 4 — Frontend | Pending |
+| FRONT-14 | Phase 4 — Frontend | Pending |
+| DOCK-01 | Phase 5 — Docker & Deployment | Pending |
+| DOCK-02 | Phase 5 — Docker & Deployment | Pending |
+| DOCK-03 | Phase 5 — Docker & Deployment | Pending |
+| DOCK-04 | Phase 5 — Docker & Deployment | Pending |
+| DOCK-05 | Phase 5 — Docker & Deployment | Pending |
+| DOCK-06 | Phase 5 — Docker & Deployment | Pending |
+| TEST-01 | Phase 6 — Testing | Pending |
+| TEST-02 | Phase 6 — Testing | Pending |
+| TEST-03 | Phase 6 — Testing | Pending |
+| TEST-04 | Phase 6 — Testing | Pending |
 
 **Coverage:**
 - v1 requirements: 48 total (plus 6 already complete from Phase 0)
-- Mapped to phases: 48
+- Mapped to phases: 48/48
 - Unmapped: 0 ✓
+
+**Phase breakdown:**
+- Phase 1: 8 requirements (DB-01..DB-07, SYS-01)
+- Phase 2: 8 requirements (PORT-01..PORT-04, WTCH-01..WTCH-03, SYS-02)
+- Phase 3: 8 requirements (CHAT-01..CHAT-08)
+- Phase 4: 14 requirements (FRONT-01..FRONT-14)
+- Phase 5: 6 requirements (DOCK-01..DOCK-06)
+- Phase 6: 4 requirements (TEST-01..TEST-04)
 
 ---
 *Requirements defined: 2026-06-08*
-*Last updated: 2026-06-08 after initial definition*
+*Last updated: 2026-06-08 — traceability populated during roadmap creation*
